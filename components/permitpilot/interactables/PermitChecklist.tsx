@@ -59,21 +59,24 @@ function PermitChecklist({
     () => interactables.find((item) => item.name === "PermitChecklist")?.id,
     [interactables]
   );
-  const [items, setItems] = useState(initialItems);
+  const [items, setItems] = useState<PermitChecklistItem[]>(initialItems);
 
   useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
 
   const toggleDone = (id: string) => {
-    const updated = items.map((item) =>
-      item.id === id
-        ? {
-            ...item,
-            status: item.status === "done" ? "todo" : "done",
-          }
-        : item
-    );
+    const updated: PermitChecklistItem[] = items.map((item) => {
+      if (item.id !== id) {
+        return item;
+      }
+      const nextStatus: PermitChecklistItem["status"] =
+        item.status === "done" ? "todo" : "done";
+      return {
+        ...item,
+        status: nextStatus,
+      };
+    });
     setItems(updated);
     if (interactableId) {
       updateInteractableComponentProps(interactableId, { items: updated });
