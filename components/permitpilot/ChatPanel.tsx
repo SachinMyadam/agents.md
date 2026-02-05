@@ -309,7 +309,7 @@ export default function ChatPanel() {
 
     try {
       await sendThreadMessage(prompt, {
-        streamResponse: false,
+        streamResponse: true,
         forceToolChoice: "fetchPermitPack",
         additionalContext: mergedProfile
           ? { businessProfile: mergedProfile }
