@@ -1,49 +1,47 @@
-# AGENTS.md
+# PermitPilot 🚛 🏗️
+### Adaptive Permits & Compliance Copilot for Small Businesses
+**Built for "The UI Strikes Back" Hackathon**
 
-![AGENTS.md logo](./public/og.png)
+[Live Demo](https://permitpilot-app.vercel.app/) | [Video Demo](#)
 
-[AGENTS.md](https://agents.md) is a simple, open format for guiding coding agents.
+## 💡 The Problem
+Starting a business involves navigating a maze of permits, licenses, and compliance rules that vary by city and business type. Founders often get stuck in static "wizard" forms that don't adapt when plans change (e.g., switching from a food truck to a brick-and-mortar restaurant).
 
-Think of AGENTS.md as a README for agents: a dedicated, predictable place
-to provide context and instructions to help AI coding agents work on your project.
+## 🚀 The Solution
+**PermitPilot** is a Generative UI agent that builds the compliance roadmap *for* you. Instead of a static form, you chat with an AI that:
+1.  **Understand your intent:** "I want to open a food truck in Hyderabad."
+2.  **Generates custom UI cards:** Shows exact costs, documents, and risk flags for *that* specific location.
+3.  **Updates persistent panels:** As you change your plan ("Actually, make it a cafe"), the checklist, timeline, and business profile update in real-time.
 
-Below is a minimal example of an AGENTS.md file:
+## 🛠️ How we used Tambo
+This project pushes the boundaries of Generative UI by combining ephemeral and persistent components:
 
-```markdown
-# Sample AGENTS.md file
+* **Generative Components (Ephemeral):** The agent decides when to render `CostBreakdownCard`, `RiskFlagsCard`, and `OfficeMapCard` based on the conversation context.
+* **Interactable Components (Persistent):** The sidebar panels (`BusinessProfile`, `PermitChecklist`, `Timeline`) are always present. The agent uses `withInteractable` tools to update their state dynamically without refreshing the page.
+* **Location Intelligence:** We integrated **Geoapify** to resolve any city in the world to its country and currency, allowing the UI to adapt globally (e.g., showing `₹` for India, `€` for Paris).
 
-## Dev environment tips
-- Use `pnpm dlx turbo run where <project_name>` to jump to a package instead of scanning with `ls`.
-- Run `pnpm install --filter <project_name>` to add the package to your workspace so Vite, ESLint, and TypeScript can see it.
-- Use `pnpm create vite@latest <project_name> -- --template react-ts` to spin up a new React + Vite package with TypeScript checks ready.
-- Check the name field inside each package's package.json to confirm the right name—skip the top-level one.
+## 💻 Tech Stack
+* **Framework:** Next.js (React)
+* **AI SDK:** Tambo (Generative UI + Agents)
+* **Styling:** Tailwind CSS
+* **Tools:** Geoapify (Geocoding), REST Countries (Currency)
 
-## Testing instructions
-- Find the CI plan in the .github/workflows folder.
-- Run `pnpm turbo run test --filter <project_name>` to run every check defined for that package.
-- From the package root you can just call `pnpm test`. The commit should pass all tests before you merge.
-- To focus on one step, add the Vitest pattern: `pnpm vitest run -t "<test name>"`.
-- Fix any test or type errors until the whole suite is green.
-- After moving files or changing imports, run `pnpm lint --filter <project_name>` to be sure ESLint and TypeScript rules still pass.
-- Add or update tests for the code you change, even if nobody asked.
-
-## PR instructions
-- Title format: [<project_name>] <Title>
-- Always run `pnpm lint` and `pnpm test` before committing.
-```
-
-## Website
-
-This repository also includes a basic Next.js website hosted at https://agents.md/
-that explains the project’s goals in a simple way, and featuring some examples.
-
-### Running the app locally
-1. Install dependencies:
-   ```bash
-   pnpm install
-   ```
-2. Start the development server:
-   ```bash
-   pnpm run dev
-   ```
-3. Open your browser and go to http://localhost:3000
+## 🏃‍♂️ Run Locally
+1.  Clone the repo:
+    ```bash
+    git clone [https://github.com/SachinMyadam/agents.md.git](https://github.com/SachinMyadam/agents.md.git)
+    cd agents.md
+    ```
+2.  Install dependencies:
+    ```bash
+    npm install
+    ```
+3.  Set up environment variables in `.env.local`:
+    ```bash
+    NEXT_PUBLIC_TAMBO_API_KEY=your_tambo_key
+    GEOAPIFY_API_KEY=your_geoapify_key
+    ```
+4.  Run the dev server:
+    ```bash
+    npm run dev
+    ```
