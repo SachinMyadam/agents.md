@@ -73,9 +73,10 @@
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f5f0e8;
+  --foreground: #101828;
   --font-sans: 'OpenAI Sans', Arial, Helvetica, sans-serif;
+  color-scheme: light;
 }
 
 @theme inline {
@@ -87,11 +88,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #f5f0e8;
+    --foreground: #101828;
+    color-scheme: light;
   }
 }
 
+html,
 body {
   background: var(--background);
   color: var(--foreground);
