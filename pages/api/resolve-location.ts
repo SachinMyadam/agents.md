@@ -29,10 +29,11 @@ async function fetchCurrency(countryCode: string) {
   if (!response.ok) {
     return null;
   }
-  const data = (await response.json()) as Array<{
-    currencies?: Record<string, { name?: string; symbol?: string }>;
-  }>;
-  const currencies = data?.[0]?.currencies;
+  const data = (await response.json()) as
+    | Array<{ currencies?: Record<string, { name?: string; symbol?: string }> }>
+    | { currencies?: Record<string, { name?: string; symbol?: string }> };
+  const record = Array.isArray(data) ? data[0] : data;
+  const currencies = record?.currencies;
   if (!currencies) {
     return null;
   }
