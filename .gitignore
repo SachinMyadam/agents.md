@@ -146,3 +146,5 @@ vite.config.ts.timestamp-*
 
 # Misc
 .DS_Store
+/.codex/
+/.npm-cache/
