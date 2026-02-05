@@ -10,61 +10,10 @@ import RiskFlagsCard from "@/components/permitpilot/generative/RiskFlagsCard";
 import DocumentPackCard from "@/components/permitpilot/generative/DocumentPackCard";
 import OfficeMapCard from "@/components/permitpilot/generative/OfficeMapCard";
 import Panel from "@/components/permitpilot/ui/Panel";
-import { findPermitTemplate } from "@/lib/permitpilot/data";
-import { convertFromUsd, resolveCurrency } from "@/lib/permitpilot/currency";
-
-interface PermitPack {
-  city?: string;
-  state?: string;
-  country?: string;
-  businessType?: string;
-  currencyCode?: string;
-  currencyLocale?: string;
-  profile?: {
-    businessName?: string;
-    city?: string;
-    state?: string;
-    country?: string;
-    currencyCode?: string;
-    businessType?: string;
-    entityType?: string;
-    headcount?: number;
-    budget?: number;
-    launchWindow?: string;
-    riskTolerance?: "low" | "medium" | "high";
-  };
-  summary: string;
-  keyPermits: string[];
-  agencies: string[];
-  timelineDays: number;
-  estimatedCost: number;
-  permitChecklist: Array<{
-    id: string;
-    title: string;
-    agency: string;
-    dueDate: string;
-    cost: number;
-    status: "todo" | "in_progress" | "blocked" | "done";
-  }>;
-  timeline: Array<{
-    id: string;
-    title: string;
-    targetDate: string;
-    owner: string;
-    status: "planned" | "active" | "waiting" | "done";
-  }>;
-  actions: Array<{
-    id: string;
-    task: string;
-    owner: string;
-    priority: "low" | "medium" | "high";
-    eta: string;
-  }>;
-  costItems: Array<{ label: string; amount: number }>;
-  risks: Array<{ title: string; severity: "low" | "medium" | "high"; description: string }>;
-  documents: Array<{ name: string; required: boolean; notes?: string }>;
-  offices: Array<{ name: string; address: string; hours?: string }>;
-}
+import {
+  buildPermitPackFromProfile,
+  type PermitPack,
+} from "@/lib/permitpilot/permitPack";
 
 function extractText(content: unknown): string {
   if (typeof content === "string") {
@@ -108,83 +57,6 @@ function parsePermitPack(raw: string): PermitPack | null {
   }
 }
 
-function buildPermitPackFromProfile(profile: PermitPack["profile"]): PermitPack | null {
-  if (!profile?.city || !profile.state || !profile.businessType) {
-    return null;
-  }
-  const budget = profile.budget ?? 0;
-  const riskTolerance = profile.riskTolerance ?? "medium";
-  const locationCurrency = resolveCurrency({
-    country: profile.country,
-    state: profile.state,
-    city: profile.city,
-  });
-  const normalizedCurrency = profile.currencyCode?.toUpperCase();
-  const currencyCode =
-    locationCurrency.code !== "USD"
-      ? locationCurrency.code
-      : normalizedCurrency ?? locationCurrency.code;
-  const currencyLocale = locationCurrency.locale;
-  const template = findPermitTemplate(
-    profile.city,
-    profile.state,
-    profile.businessType
-  );
-  const riskMultiplier =
-    riskTolerance === "high" ? 0.9 : riskTolerance === "low" ? 1.15 : 1;
-  const baseCost = convertFromUsd(template.baseCost, currencyCode);
-  const estimatedCost = Math.round(baseCost * riskMultiplier);
-  const costRatio = baseCost > 0 ? estimatedCost / baseCost : 1;
-  const timelineShift =
-    riskTolerance === "high" ? -7 : riskTolerance === "low" ? 7 : 0;
-  const timelineDays = Math.max(14, template.baseTimelineDays + timelineShift);
-  const costItems = template.costItems.map((item) => ({
-    ...item,
-    amount: Math.max(
-      0,
-      Math.round(convertFromUsd(item.amount, currencyCode) * costRatio)
-    ),
-  }));
-  const permitChecklist = template.checklist.map((item) => ({
-    ...item,
-    cost: Math.max(
-      0,
-      Math.round(convertFromUsd(item.cost, currencyCode) * costRatio)
-    ),
-  }));
-  const risks = [...template.risks];
-  if (budget > 0 && budget < estimatedCost) {
-    risks.push({
-      title: "Budget Gap",
-      severity: "high",
-      description:
-        "Current budget is below expected compliance costs. Adjust scope or secure more funding.",
-    });
-  }
-  const summary = `${profile.businessType} launch in ${profile.city}, ${profile.state} requires ${template.keyPermits.length} core permits with an estimated ${timelineDays}-day timeline.`;
-
-  return {
-    city: profile.city,
-    state: profile.state,
-    country: profile.country,
-    businessType: profile.businessType,
-    currencyCode,
-    currencyLocale,
-    profile,
-    summary,
-    keyPermits: template.keyPermits,
-    agencies: template.agencies,
-    timelineDays,
-    estimatedCost,
-    permitChecklist,
-    timeline: template.timeline,
-    actions: template.actions,
-    costItems,
-    risks,
-    documents: template.documents,
-    offices: template.offices,
-  };
-}
 
 function extractPermitPack(content: unknown): PermitPack | null {
   const text = extractText(content).trim();

@@ -6,6 +6,11 @@ import {
   useTamboThreadInput,
 } from "@tambo-ai/react";
 import { formatCurrency } from "@/lib/permitpilot/currency";
+import {
+  buildPermitPackFromProfile,
+  type PermitPack,
+  type PermitProfile,
+} from "@/lib/permitpilot/permitPack";
 
 const quickPrompts = [
   "Open a food truck in Austin with 2 employees.",
@@ -53,19 +58,20 @@ function isPermitPackContent(content: string): boolean {
   }
 }
 
-interface PermitPack {
-  summary: string;
-  keyPermits: string[];
-  agencies: string[];
-  timelineDays: number;
-  estimatedCost: number;
-  costItems: Array<{ label: string; amount: number }>;
-  risks: Array<{ title: string }>;
-  documents: Array<{ name: string; required: boolean }>;
-  offices: Array<{ name: string }>;
-  currencyCode?: string;
-  currencyLocale?: string;
-}
+type PermitPackLite = Pick<
+  PermitPack,
+  | "summary"
+  | "keyPermits"
+  | "agencies"
+  | "timelineDays"
+  | "estimatedCost"
+  | "costItems"
+  | "risks"
+  | "documents"
+  | "offices"
+  | "currencyCode"
+  | "currencyLocale"
+>;
 
 function extractText(content: unknown): string {
   if (typeof content === "string") {
@@ -86,9 +92,9 @@ function extractText(content: unknown): string {
   return "";
 }
 
-function parsePermitPack(raw: string): PermitPack | null {
+function parsePermitPack(raw: string): PermitPackLite | null {
   try {
-    const parsed = JSON.parse(raw) as Partial<PermitPack>;
+    const parsed = JSON.parse(raw) as Partial<PermitPackLite>;
     if (!parsed || typeof parsed.summary !== "string") {
       return null;
     }
@@ -99,13 +105,13 @@ function parsePermitPack(raw: string): PermitPack | null {
     ) {
       return null;
     }
-    return parsed as PermitPack;
+    return parsed as PermitPackLite;
   } catch {
     return null;
   }
 }
 
-function extractPermitPack(content: unknown): PermitPack | null {
+function extractPermitPack(content: unknown): PermitPackLite | null {
   const text = extractText(content).trim();
   if (!text) {
     return null;
@@ -128,6 +134,8 @@ export default function ChatPanel() {
   const interactables = useCurrentInteractablesSnapshot();
   const { updateInteractableComponentProps } = useTamboInteractable();
   const isPending = !isIdle;
+  const [optimisticPack, setOptimisticPack] = useState<PermitPack | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const profileContext = useMemo(() => {
     const profile = interactables.find(
@@ -144,6 +152,14 @@ export default function ChatPanel() {
     () => interactables.find((item) => item.name === "PermitChecklist")?.id,
     [interactables]
   );
+  const timelineId = useMemo(
+    () => interactables.find((item) => item.name === "LaunchTimeline")?.id,
+    [interactables]
+  );
+  const actionsId = useMemo(
+    () => interactables.find((item) => item.name === "NextActions")?.id,
+    [interactables]
+  );
 
   const getProfileUpdates = (
     message: string,
@@ -152,7 +168,7 @@ export default function ChatPanel() {
     const updates: Record<string, any> = {};
     const lower = message.toLowerCase();
 
-    if (lower.includes("hyderabad")) {
+    if (lower.includes("hyderabad") || lower.includes("hydera")) {
       updates.city = "Hyderabad";
       updates.state = "TG";
       updates.country = "India";
@@ -160,6 +176,21 @@ export default function ChatPanel() {
     } else if (lower.includes("india")) {
       updates.country = "India";
       updates.currencyCode = "INR";
+    }
+
+    const locationMatch = lower.match(
+      /\bin\s+([a-z\s]+?)(?:,|\.|with|under|for|$)/
+    );
+    if (locationMatch) {
+      const candidate = locationMatch[1].trim();
+      if (candidate && !/\d/.test(candidate)) {
+        updates.city =
+          candidate
+            .split(" ")
+            .filter(Boolean)
+            .map((part) => part[0]?.toUpperCase() + part.slice(1))
+            .join(" ") || updates.city;
+      }
     }
 
     if (lower.includes("fastest") || lower.includes("expedite")) {
@@ -201,6 +232,7 @@ export default function ChatPanel() {
   };
 
   const sendPrompt = async (prompt: string) => {
+    setSendError(null);
     const updates = getProfileUpdates(prompt, profileContext);
     const mergedProfile = profileContext
       ? { ...profileContext, ...updates }
@@ -215,13 +247,48 @@ export default function ChatPanel() {
       });
     }
 
-    await sendThreadMessage(prompt, {
-      streamResponse: false,
-      forceToolChoice: "fetchPermitPack",
-      additionalContext: mergedProfile
-        ? { businessProfile: mergedProfile }
-        : undefined,
-    });
+    const optimistic = buildPermitPackFromProfile(
+      mergedProfile as PermitProfile
+    );
+    if (optimistic) {
+      setOptimisticPack(optimistic);
+      if (profileId && optimistic.profile) {
+        updateInteractableComponentProps(profileId, optimistic.profile);
+      }
+      if (checklistId) {
+        updateInteractableComponentProps(checklistId, {
+          items: optimistic.permitChecklist,
+          currencyCode: optimistic.currencyCode,
+          currencyLocale: optimistic.currencyLocale,
+        });
+      }
+      if (timelineId) {
+        updateInteractableComponentProps(timelineId, {
+          milestones: optimistic.timeline,
+        });
+      }
+      if (actionsId) {
+        updateInteractableComponentProps(actionsId, {
+          actions: optimistic.actions,
+        });
+      }
+    }
+
+    try {
+      await sendThreadMessage(prompt, {
+        streamResponse: false,
+        forceToolChoice: "fetchPermitPack",
+        additionalContext: mergedProfile
+          ? { businessProfile: mergedProfile }
+          : undefined,
+      });
+    } catch (error) {
+      setSendError(
+        error instanceof Error
+          ? error.message
+          : "Unable to contact the agent. Check your API key."
+      );
+    }
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -300,7 +367,9 @@ export default function ChatPanel() {
         0
       ) ?? 0;
 
-    if (!permitPack && lastUserIndex >= 0) {
+    const effectivePack = permitPack ?? optimisticPack;
+
+    if (!effectivePack && lastUserIndex >= 0) {
       return [
         {
           title: "Generating",
@@ -316,7 +385,7 @@ export default function ChatPanel() {
       ];
     }
 
-    if (!permitPack) {
+    if (!effectivePack) {
       if (!fallbackPermits.length) {
         return [];
       }
@@ -354,47 +423,47 @@ export default function ChatPanel() {
     return [
       {
         title: "Permits",
-        items: permitPack.keyPermits,
-        meta: permitPack.summary,
+        items: effectivePack.keyPermits,
+        meta: effectivePack.summary,
       },
       {
         title: "Costs",
-        items: permitPack.costItems.map((item) =>
+        items: effectivePack.costItems.map((item) =>
           `${item.label} ${formatCurrency(
             item.amount,
-            permitPack.currencyCode,
-            permitPack.currencyLocale
+            effectivePack.currencyCode,
+            effectivePack.currencyLocale
           )}`
         ),
         meta: `Total ${formatCurrency(
-          permitPack.estimatedCost,
-          permitPack.currencyCode,
-          permitPack.currencyLocale
+          effectivePack.estimatedCost,
+          effectivePack.currencyCode,
+          effectivePack.currencyLocale
         )}`,
       },
       {
         title: "Documents",
-        items: permitPack.documents.map((doc) =>
+        items: effectivePack.documents.map((doc) =>
           `${doc.name}${doc.required ? " (Required)" : " (Optional)"}`
         ),
         meta: "Submission checklist",
       },
       {
         title: "Risks",
-        items: permitPack.risks?.length
-          ? permitPack.risks.map((risk) => risk.title)
+        items: effectivePack.risks?.length
+          ? effectivePack.risks.map((risk) => risk.title)
           : ["No major risks flagged"],
         meta: "Compliance flags",
       },
       {
         title: "Offices",
-        items: permitPack.offices?.length
-          ? permitPack.offices.map((office) => office.name)
-          : permitPack.agencies,
+        items: effectivePack.offices?.length
+          ? effectivePack.offices.map((office) => office.name)
+          : effectivePack.agencies,
         meta: "Where to go",
       },
     ];
-  }, [permitPack, interactables, lastUserIndex]);
+  }, [permitPack, optimisticPack, interactables, lastUserIndex]);
   const slidesAvailable = slides.length > 0;
   const displayMessages = slidesAvailable
     ? visibleMessages.filter((message) => message.role !== "assistant")
@@ -440,6 +509,11 @@ export default function ChatPanel() {
   useEffect(() => {
     setSlideIndex(0);
   }, [permitPack, lastUserIndex]);
+  useEffect(() => {
+    if (permitPack) {
+      setOptimisticPack(null);
+    }
+  }, [permitPack]);
 
   const statusBadgeClass = isPending
     ? "border-amber-200 bg-amber-50 text-amber-700"
@@ -548,6 +622,12 @@ export default function ChatPanel() {
                 </button>
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {sendError ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+            {sendError}
           </div>
         ) : null}
 
