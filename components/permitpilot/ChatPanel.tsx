@@ -168,16 +168,6 @@ export default function ChatPanel() {
     const updates: Record<string, any> = {};
     const lower = message.toLowerCase();
 
-    if (lower.includes("hyderabad") || lower.includes("hydera")) {
-      updates.city = "Hyderabad";
-      updates.state = "TG";
-      updates.country = "India";
-      updates.currencyCode = "INR";
-    } else if (lower.includes("india")) {
-      updates.country = "India";
-      updates.currencyCode = "INR";
-    }
-
     const locationMatch = lower.match(
       /\bin\s+([a-z\s]+?)(?:,|\.|with|under|for|$)/
     );
@@ -231,9 +221,52 @@ export default function ChatPanel() {
     return updates;
   };
 
+  const extractLocationQuery = (message: string) => {
+    const lower = message.toLowerCase();
+    const inMatch = lower.match(
+      /\b(?:in|at|near)\s+([a-z\s,.'-]+?)(?:\s+with|\s+under|\s+for|\.|,|$)/
+    );
+    if (inMatch?.[1]) {
+      return inMatch[1].trim();
+    }
+    return null;
+  };
+
+  const resolveLocation = async (query: string) => {
+    try {
+      const response = await fetch(
+        `/api/resolve-location?q=${encodeURIComponent(query)}`
+      );
+      if (!response.ok) {
+        return null;
+      }
+      return (await response.json()) as {
+        city?: string;
+        state?: string;
+        country?: string;
+        currencyCode?: string;
+      };
+    } catch {
+      return null;
+    }
+  };
+
   const sendPrompt = async (prompt: string) => {
     setSendError(null);
-    const updates = getProfileUpdates(prompt, profileContext);
+    let updates = getProfileUpdates(prompt, profileContext);
+    const locationQuery = extractLocationQuery(prompt);
+    if (locationQuery) {
+      const resolved = await resolveLocation(locationQuery);
+      if (resolved) {
+        updates = {
+          ...updates,
+          city: resolved.city ?? updates.city,
+          state: resolved.state ?? updates.state,
+          country: resolved.country ?? updates.country,
+          currencyCode: resolved.currencyCode ?? updates.currencyCode,
+        };
+      }
+    }
     const mergedProfile = profileContext
       ? { ...profileContext, ...updates }
       : updates;
